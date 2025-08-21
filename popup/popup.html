@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draftly Email Assistant</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <img src="../icons/icon32.png" alt="Draftly" class="logo-icon">
+                <h1 class="logo-text">Draftly</h1>
+            </div>
+            <div class="version">v1.0.0</div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Setup Section (shown when API key not configured) -->
+            <section class="setup-section" id="setupSection" style="display: none;">
+                <div class="setup-card">
+                    <h2 class="setup-title">🤖 AI Setup Required</h2>
+                    <p class="setup-description">
+                        To use Draftly's AI-powered email generation, you need to configure your OpenAI API key.
+                    </p>
+                    
+                    <div class="form-group">
+                        <label for="apiKeyInput" class="form-label">
+                            <span class="label-text">OpenAI API Key</span>
+                            <span class="label-required">*</span>
+                        </label>
+                        <input 
+                            type="password" 
+                            id="apiKeyInput" 
+                            class="form-input" 
+                            placeholder="sk-..." 
+                            maxlength="200"
+                        >
+                        <div class="input-help">
+                            Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>
+                        </div>
+                    </div>
+
+                    <button id="saveApiKeyBtn" class="btn btn-primary" type="button">
+                        <span class="btn-text">Save API Key</span>
+                        <div class="btn-loader" id="saveApiKeyLoader"></div>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Consent Section -->
+            <section class="consent-section" id="consentSection" style="display: none;">
+                <div class="consent-card">
+                    <h2 class="consent-title">📋 Data Processing Consent</h2>
+                    <div class="consent-content">
+                        <p><strong>Draftly needs your consent to process email data using AI.</strong></p>
+                        
+                        <div class="consent-details">
+                            <h3>What data is processed:</h3>
+                            <ul>
+                                <li>Email content you input for generating replies</li>
+                                <li>Selected tone preferences</li>
+                                <li>Usage statistics (anonymized)</li>
+                            </ul>
+
+                            <h3>How data is used:</h3>
+                            <ul>
+                                <li>Sent to OpenAI API to generate email replies</li>
+                                <li>Used to improve response quality</li>
+                                <li>Stored temporarily for rate limiting</li>
+                            </ul>
+
+                            <h3>Data protection:</h3>
+                            <ul>
+                                <li>Data is encrypted in transit</li>
+                                <li>No data is stored permanently by Draftly</li>
+                                <li>You can revoke consent anytime</li>
+                                <li>Consent expires after 6 months</li>
+                            </ul>
+                        </div>
+
+                        <div class="consent-actions">
+                            <button id="grantConsentBtn" class="btn btn-primary">
+                                ✅ I Consent to Data Processing
+                            </button>
+                            <button id="declineConsentBtn" class="btn btn-outline">
+                                ❌ Decline
+                            </button>
+                        </div>
+
+                        <div class="consent-footer">
+                            <small>
+                                By consenting, you agree to our data processing practices. 
+                                You can revoke consent anytime in settings.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Input Section -->
+            <section class="input-section" id="inputSection">
+                <!-- Rate Limit Warning -->
+                <div class="rate-limit-warning" id="rateLimitWarning" style="display: none;">
+                    <div class="warning-content">
+                        <span class="warning-icon">⚠️</span>
+                        <span class="warning-text">Rate limit exceeded. Please wait <span id="rateLimitCountdown">60</span> seconds.</span>
+                    </div>
+                </div>
+
+                <!-- API Status -->
+                <div class="api-status" id="apiStatus" style="display: none;">
+                    <div class="status-indicator">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span class="status-text" id="statusText">API Ready</span>
+                    </div>
+                    <div class="usage-info" id="usageInfo">
+                        <small>Requests: <span id="requestCount">0</span>/10 per minute</small>
+                    </div>
+                </div>
+            <!-- Input Section -->
+            <section class="input-section">
+                <div class="form-group">
+                    <label for="emailInput" class="form-label">
+                        <span class="label-text">Email Message or Prompt</span>
+                        <span class="label-required">*</span>
+                    </label>
+                    <textarea 
+                        id="emailInput" 
+                        class="form-textarea" 
+                        placeholder="Paste the original email here or enter your prompt for generating a professional reply..."
+                        rows="6"
+                        maxlength="2000"
+                        required
+                    ></textarea>
+                    <div class="character-count">
+                        <span id="charCount">0</span>/2000
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="toneSelect" class="form-label">Reply Tone</label>
+                    <select id="toneSelect" class="form-select">
+                        <option value="professional">Professional</option>
+                        <option value="friendly">Friendly</option>
+                        <option value="formal">Formal</option>
+                        <option value="casual">Casual</option>
+                    </select>
+                </div>
+
+                <button id="generateBtn" class="btn btn-primary" type="button">
+                    <span class="btn-text">🤖 Generate AI Reply</span>
+                    <div class="btn-loader" id="btnLoader"></div>
+                </button>
+            </section>
+
+            <!-- Output Section -->
+            <section class="output-section" id="outputSection" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label">Generated Reply</label>
+                    <div class="reply-container">
+                        <div id="generatedReply" class="reply-content"></div>
+                        <div class="reply-actions">
+                            <button id="copyBtn" class="btn btn-secondary btn-small">
+                                <span class="btn-icon">📋</span>
+                                Copy
+                            </button>
+                            <button id="regenerateBtn" class="btn btn-outline btn-small">
+                                <span class="btn-icon">🔄</span>
+                                Regenerate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Status Message -->
+            <div id="statusMessage" class="status-message" style="display: none;"></div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-links">
+                <a href="#" id="settingsLink" class="footer-link">⚙️ Settings</a>
+                <a href="#" id="consentLink" class="footer-link">📋 Consent</a>
+                <a href="#" id="helpLink" class="footer-link">❓ Help</a>
+                <a href="#" id="aboutLink" class="footer-link">ℹ️ About</a>
+            </div>
+            <div class="footer-info">
+                <small>Powered by OpenAI GPT • <span id="consentStatus">Consent: Not granted</span></small>
+            </div>
+        </footer>
+    </div>
+
+    <script src="../ai-service.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

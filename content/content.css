@@ -1,0 +1,102 @@
+/**
+ * Draftly Email Assistant - Content Script Styles
+ */
+
+/* Notification Styles */
+.draftly-notification {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    max-width: 300px;
+    word-wrap: break-word;
+    user-select: none;
+    pointer-events: auto;
+}
+
+.draftly-notification-success {
+    background: #d1fae5 !important;
+    color: #065f46 !important;
+    border: 1px solid #a7f3d0 !important;
+}
+
+.draftly-notification-error {
+    background: #fee2e2 !important;
+    color: #991b1b !important;
+    border: 1px solid #fca5a5 !important;
+}
+
+.draftly-notification-info {
+    background: #dbeafe !important;
+    color: #1e40af !important;
+    border: 1px solid #93c5fd !important;
+}
+
+/* Draftly Button Styles */
+.draftly-button {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+    outline: none !important;
+}
+
+.draftly-button:hover {
+    background: #5a67d8 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+}
+
+.draftly-button:active {
+    transform: translateY(0) !important;
+}
+
+/* Gmail-specific styles */
+.gmail .draftly-button {
+    top: 5px !important;
+    right: 5px !important;
+}
+
+/* Outlook-specific styles */
+.outlook .draftly-button {
+    top: 8px !important;
+    right: 8px !important;
+}
+
+/* Yahoo-specific styles */
+.yahoo .draftly-button {
+    top: 6px !important;
+    right: 6px !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .draftly-notification {
+        top: 10px !important;
+        right: 10px !important;
+        left: 10px !important;
+        max-width: none !important;
+    }
+    
+    .draftly-button {
+        padding: 6px 10px !important;
+        font-size: 11px !important;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .draftly-notification-success {
+        background: #064e3b !important;
+        color: #a7f3d0 !important;
+        border: 1px solid #065f46 !important;
+    }
+    
+    .draftly-notification-error {
+        background: #7f1d1d !important;
+        color: #fca5a5 !important;
+        border: 1px solid #991b1b !important;
+    }
+    
+    .draftly-notification-info {
+        background: #1e3a8a !important;
+        color: #93c5fd !important;
+        border: 1px solid #1e40af !important;
+    }
+}

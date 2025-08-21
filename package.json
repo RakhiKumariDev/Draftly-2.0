@@ -1,0 +1,42 @@
+{
+  "name": "draftly-email-assistant",
+  "version": "1.0.0",
+  "description": "Professional email reply generator Chrome extension",
+  "main": "popup/popup.js",
+  "scripts": {
+    "dev": "echo 'Development mode - Load extension in Chrome'",
+    "build": "echo 'Build complete - Extension ready for production'",
+    "test": "echo 'Run extension tests'",
+    "lint": "echo 'Lint JavaScript files'",
+    "format": "echo 'Format code with Prettier'"
+  },
+  "keywords": [
+    "chrome-extension",
+    "email",
+    "ai",
+    "productivity",
+    "assistant",
+    "gmail",
+    "outlook"
+  ],
+  "author": "Draftly Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/draftly-email-assistant.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/draftly-email-assistant/issues"
+  },
+  "homepage": "https://github.com/yourusername/draftly-email-assistant#readme",
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "draftly@email-assistant.com",
+      "strict_min_version": "88.0"
+    }
+  }
+}
