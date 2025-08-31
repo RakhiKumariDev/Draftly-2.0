@@ -20,8 +20,6 @@ class DraftlyPopup {
         this.setupSection = document.getElementById('setupSection');
         this.consentSection = document.getElementById('consentSection');
         this.inputSection = document.getElementById('inputSection');
-        this.apiKeyInput = document.getElementById('apiKeyInput');
-        this.saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
         this.grantConsentBtn = document.getElementById('grantConsentBtn');
         this.declineConsentBtn = document.getElementById('declineConsentBtn');
         this.rateLimitWarning = document.getElementById('rateLimitWarning');
@@ -33,42 +31,122 @@ class DraftlyPopup {
         this.currentTone = 'professional';
         this.aiService = null;
         this.rateLimitCountdown = null;
-        
+
         // Make AI service available globally for debugging
         window.draftlyPopup = this;
-        
+
         this.initializeAI();
     }
 
     /**
      * Initialize AI service and UI
      */
-    async initializeAI() {
-        try {
-            console.log('🚀 Initializing Draftly AI service...');
-            
-            // Initialize AI service
-            this.aiService = new DraftlyAIService();
-            
-            // Make AI service available globally for debugging
-            window.draftlyAI = this.aiService;
-            
-            // Check initial state and show appropriate UI
-            await this.checkInitialState();
-            
-            // Initialize event listeners
-            this.initializeEventListeners();
-            
-            // Start periodic updates
-            this.startPeriodicUpdates();
-            
-            console.log('✅ Draftly AI popup initialized');
-            
-        } catch (error) {
-            console.error('❌ Failed to initialize AI popup:', error);
-            this.showStatusMessage('Failed to initialize AI service.', 'error');
+    async initialize() {
+    try {
+        console.log("🚀 Initializing Draftly Extension...");
+
+        // Step 1: Initialize Google API
+        await this.initializeGoogleAPI();
+
+        // Step 2: Check if user already signed in
+        const authInstance = gapi.auth2.getAuthInstance();
+        if (authInstance && authInstance.isSignedIn.get()) {
+            console.log("✅ User already signed in → initializing AI...");
+            await this.initializeAI();
+        } else {
+            console.log("⚠️ User not signed in yet → triggering sign-in flow.");
+            this.showSection("auth"); // Show the sign-in section
+
+            try {
+                await authInstance.signIn();
+                console.log("✅ User signed in successfully.");
+                await this.initializeAI();
+            } catch (signInError) {
+                console.error("❌ Google Sign-In failed:", signInError);
+            }
         }
+
+    } catch (error) {
+        console.error("❌ Failed to initialize extension:", error);
     }
+}
+
+initializeGoogleAPI() {
+    return new Promise((resolve, reject) => {
+        if (typeof gapi === 'undefined') {
+            console.error('❌ Google API library not loaded. Ensure it is included in your HTML file.');
+            reject(new Error('Google API library not loaded'));
+            return;
+        }
+
+        gapi.load("auth2", () => {
+            gapi.auth2.init({
+                client_id: "104128844470-afiofbri82hlv7ejmtv74vv7nf0h5149.apps.googleusercontent.com", // Replace with your Google Client ID
+                scope: "https://www.googleapis.com/auth/gmail.readonly email profile"
+            }).then(() => {
+                console.log("✅ Google OAuth client initialized");
+
+                const authInstance = gapi.auth2.getAuthInstance();
+
+                // Clear cached sessions to force sign-in
+                authInstance.disconnect();
+
+                // Step 3: Attach listener for login state changes
+                authInstance.isSignedIn.listen(async (isSignedIn) => {
+                    if (isSignedIn) {
+                        console.log("🔑 User signed in → initializing AI...");
+                        await this.initializeAI();
+                    } else {
+                        console.log("🚪 User signed out → hiding AI input.");
+                        this.showSection("auth"); // Optional: show sign-in section again
+                    }
+                });
+
+                // Force sign-in
+                console.log("⚠️ Forcing Google Sign-In...");
+                authInstance.signIn().then(() => {
+                    console.log("✅ User signed in successfully.");
+                    resolve();
+                }).catch((signInError) => {
+                    console.error("❌ Google Sign-In failed:", signInError);
+                    reject(signInError);
+                });
+            }).catch((err) => {
+                console.error("❌ Google OAuth init failed:", err);
+                reject(err);
+            });
+        });
+    });
+}
+
+async initializeAI() {
+    try {
+        console.log("🤖 Initializing Draftly AI service...");
+
+        // Create AI service
+        this.aiService = new DraftlyAIService();
+        window.draftlyAI = this.aiService;
+
+        // Check user consent
+        const hasConsent = await this.aiService.consentManager.hasConsent();
+        if (!hasConsent) {
+            console.log("⚠️ No consent found → showing consent screen.");
+            this.showSection("consent");
+        } else {
+            console.log("✅ Consent verified → showing input section.");
+            this.showSection("input");
+            this.updateConsentStatus();
+            this.updateAPIStatus();
+        }
+
+        // Attach event listeners
+        this.initializeEventListeners();
+        console.log("🎉 Draftly AI popup ready!");
+    } catch (err) {
+        console.error("❌ Failed to initialize AI:", err);
+    }
+}
+
 
     /**
      * Check initial state and show appropriate UI section
@@ -131,19 +209,6 @@ class DraftlyPopup {
      * Initialize all event listeners
      */
     initializeEventListeners() {
-        // API Key setup
-        if (this.saveApiKeyBtn) {
-            this.saveApiKeyBtn.addEventListener('click', () => this.handleSaveApiKey());
-        }
-
-        if (this.apiKeyInput) {
-            this.apiKeyInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    this.handleSaveApiKey();
-                }
-            });
-        }
-
         // Consent management
         if (this.grantConsentBtn) {
             this.grantConsentBtn.addEventListener('click', () => this.handleGrantConsent());
@@ -162,6 +227,30 @@ class DraftlyPopup {
         }
 
         if (this.toneSelect) {
+            const allowedTones = ['formal', 'casual'];
+            const options = this.toneSelect.options;
+
+            for (let i = 0; i < options.length; i++) {
+                const option = options[i];
+                const tone = option.value.toLowerCase();
+
+                if (!allowedTones.includes(tone)) {
+                    option.disabled = true;
+                    option.style.color = 'grey';
+                    option.style.cursor = 'not-allowed';
+
+                    // Add an 'i' icon as a child element
+                    const infoIcon = document.createElement('span');
+                    infoIcon.innerText = ' ℹ️';
+                    infoIcon.style.color = 'grey';
+                    infoIcon.style.cursor = 'help';
+                    infoIcon.title = 'Buy our subscription or premium feature';
+
+                    // Append the icon to the option
+                    option.appendChild(infoIcon);
+                }
+            }
+
             this.toneSelect.addEventListener('change', () => {
                 this.currentTone = this.toneSelect.value;
                 this.saveUserPreferences();
@@ -223,51 +312,11 @@ class DraftlyPopup {
                 this.copyToClipboard();
             }
         });
-    }
 
-    /**
-     * Handle save API key
-     */
-    async handleSaveApiKey() {
-        const apiKey = this.apiKeyInput?.value?.trim();
+
         
-        if (!apiKey) {
-            this.showStatusMessage('Please enter your OpenAI API key.', 'error');
-            return;
-        }
-
-        if (!apiKey.startsWith('sk-')) {
-            this.showStatusMessage('Invalid API key format. Must start with "sk-"', 'error');
-            return;
-        }
-
-        this.setLoadingState(this.saveApiKeyBtn, true);
-
-        try {
-            await this.aiService.saveAPIKey(apiKey);
-            this.showStatusMessage('API key saved successfully!', 'success');
-            
-            // Clear input for security
-            if (this.apiKeyInput) {
-                this.apiKeyInput.value = '';
-            }
-            
-            // Check consent next
-            const hasConsent = await this.aiService.consentManager.hasConsent();
-            if (!hasConsent) {
-                setTimeout(() => this.showSection('consent'), 1000);
-            } else {
-                setTimeout(() => this.showSection('input'), 1000);
-                this.updateConsentStatus();
-                this.updateAPIStatus();
-            }
-            
-        } catch (error) {
-            console.error('Error saving API key:', error);
-            this.showStatusMessage(`Failed to save API key: ${error.message}`, 'error');
-        } finally {
-            this.setLoadingState(this.saveApiKeyBtn, false);
-        }
+        // Inject Gmail button
+        this.injectGmailButton();
     }
 
     /**
@@ -914,6 +963,96 @@ Developed with ❤️ for the modern workplace.
             console.error('❌ Network error:', error);
             return false;
         }
+    }
+
+    /**
+     * Inject Gmail button with options for replying or generating a response
+     */
+    injectGmailButton() {
+        const checkToolbar = setInterval(() => {
+            const gmailToolbar = document.querySelector('.G-Ni'); // Gmail toolbar selector
+            if (gmailToolbar) {
+                clearInterval(checkToolbar);
+
+                // Create the button
+                const draftlyButton = document.createElement('button');
+                draftlyButton.innerText = 'Draftly AI';
+                draftlyButton.className = 'draftly-ai-button';
+                draftlyButton.style.margin = '0 8px';
+                draftlyButton.style.padding = '8px 12px';
+                draftlyButton.style.backgroundColor = '#4f46e5';
+                draftlyButton.style.color = '#fff';
+                draftlyButton.style.border = 'none';
+                draftlyButton.style.borderRadius = '4px';
+                draftlyButton.style.cursor = 'pointer';
+
+                // Add click event listener
+                draftlyButton.addEventListener('click', () => {
+                    const userChoice = confirm('Choose an option:\nOK: Reply to mail thread\nCancel: Generate email response by prompting');
+
+                    if (userChoice) {
+                        const emailContent = this.getEmailContent();
+                        if (emailContent) {
+                            this.aiService.generateEmailReply(emailContent, 'casual')
+                                .then(reply => alert(`AI Reply:\n${reply}`))
+                                .catch(err => alert(`Error: ${err.message}`));
+                        }
+                    } else {
+                        const prompt = prompt('Enter your prompt for the email reply:');
+                        if (prompt) {
+                            this.aiService.generateEmailReply(prompt, 'formal')
+                                .then(reply => alert(`Generated Reply:\n${reply}`))
+                                .catch(err => alert(`Error: ${err.message}`));
+                        }
+                    }
+                });
+
+                // Append the button to the Gmail toolbar
+                gmailToolbar.appendChild(draftlyButton);
+                console.log('✅ Draftly AI button injected into Gmail toolbar.');
+            }
+        }, 500); // Check every 500ms
+    }
+
+    /**
+     * Extract email content from Gmail interface
+     * @returns {string} - The email content
+     */
+    getEmailContent() {
+        const emailBody = document.querySelector('.a3s'); // Gmail email body selector
+        if (emailBody) {
+            return emailBody.innerText.trim();
+        }
+        alert('No email content found.');
+        return null;
+    }
+
+    /**
+     * Initialize Google API and ensure user is signed in
+     */
+    initializeGoogleAPI() {
+        gapi.load('auth2', () => {
+            gapi.auth2.init({
+                client_id: '104128844470-afiofbri82hlv7ejmtv74vv7nf0h5149.apps.googleusercontent.com', // Replace with your Google Client ID
+                scope: 'https://www.googleapis.com/auth/gmail.readonly'
+            }).then(() => {
+                console.log('Google OAuth client initialized');
+
+                const authInstance = gapi.auth2.getAuthInstance();
+                if (!authInstance.isSignedIn.get()) {
+                    console.log('User not signed in. Triggering sign-in flow.');
+                    authInstance.signIn().then(googleUser => {
+                        console.log('User signed in:', googleUser.getBasicProfile().getName());
+                    }).catch(error => {
+                        console.error('Google Sign-In failed:', error);
+                    });
+                } else {
+                    console.log('User already signed in:', authInstance.currentUser.get().getBasicProfile().getName());
+                }
+            }).catch(error => {
+                console.error('Failed to initialize Google OAuth client:', error);
+            });
+        });
     }
 }
 

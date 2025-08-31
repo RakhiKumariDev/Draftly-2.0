@@ -31,6 +31,60 @@ class DraftlyContentScript {
     }
 
     /**
+     * Load Google API library dynamically
+     */
+    loadGoogleAPI() {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://apis.google.com/js/api.js';
+            script.onload = () => {
+                console.log('Google API library loaded');
+                resolve();
+            };
+            script.onerror = () => {
+                console.error('Failed to load Google API library');
+                reject(new Error('Google API library failed to load'));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
+    /**
+     * Initialize Google Sign-In
+     */
+    async initializeGoogleSignIn() {
+        try {
+            await this.loadGoogleAPI();
+            gapi.load('auth2', () => {
+                gapi.auth2.init({
+                    client_id: '104128844470-afiofbri82hlv7ejmtv74vv7nf0h5149.apps.googleusercontent.com', // Replace with your Google Client ID
+                    scope: 'https://www.googleapis.com/auth/gmail.readonly'
+                }).then(() => {
+                    console.log('Google OAuth client initialized');
+
+                    const authInstance = gapi.auth2.getAuthInstance();
+                    if (!authInstance.isSignedIn.get()) {
+                        console.log('User not signed in. Triggering sign-in flow.');
+                        authInstance.signIn().then(googleUser => {
+                            console.log('User signed in:', googleUser.getBasicProfile().getName());
+                            this.injectGmailButton(); // Inject button after successful sign-in
+                        }).catch(error => {
+                            console.error('Google Sign-In failed:', error);
+                        });
+                    } else {
+                        console.log('User already signed in:', authInstance.currentUser.get().getBasicProfile().getName());
+                        this.injectGmailButton(); // Inject button if already signed in
+                    }
+                }).catch(error => {
+                    console.error('Failed to initialize Google OAuth client:', error);
+                });
+            });
+        } catch (error) {
+            console.error('Error during Google Sign-In initialization:', error);
+        }
+    }
+
+    /**
      * Initialize the content script
      */
     initialize() {
@@ -38,10 +92,14 @@ class DraftlyContentScript {
 
         // Wait for DOM to be ready
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.setup());
+            document.addEventListener('DOMContentLoaded', () => {
+                this.injectGmailButton();
+            });
         } else {
-            this.setup();
+            this.injectGmailButton();
         }
+
+        this.isInitialized = true;
     }
 
     /**
@@ -418,13 +476,13 @@ class DraftlyContentScript {
             right: '10px',
             zIndex: '10000',
             padding: '8px 12px',
-            background: '#667eea',
+            background: 'rgb(102, 126, 234)',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
             fontSize: '12px',
             cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+            boxShadow: 'rgba(0, 0, 0, 0.2) 0px 2px 8px'
         });
 
         button.addEventListener('click', (e) => {
@@ -441,85 +499,78 @@ class DraftlyContentScript {
     }
 
     /**
-     * Open Draftly popup
+     * Inject Gmail button into the right-hand side of the email compose area
      */
-    openDraftlyPopup() {
-        // Since we can't directly open the popup from content script,
-        // we can send a message to background to handle this
-        chrome.runtime.sendMessage({
-            type: 'OPEN_POPUP',
-            data: { source: 'content_script' }
-        });
-    }
+    injectGmailButton() {
+        const checkPlacement = setInterval(() => {
+            // Try to find the email compose area
+            const emailComposeArea = document.querySelector('.aDh'); // Updated Gmail email compose area selector
 
-    /**
-     * Process currently selected text
-     */
-    async processSelectedText() {
-        const selectedText = window.getSelection().toString().trim();
-        
-        if (selectedText) {
-            await this.handleProcessSelectedText({ selectedText });
-        } else {
-            this.showNotification('Please select some text first.', 'info');
-        }
-    }
+            if (emailComposeArea) {
+                clearInterval(checkPlacement);
 
-    /**
-     * Show notification to user
-     * @param {string} message - Notification message
-     * @param {string} type - Notification type (success, error, info)
-     */
-    showNotification(message, type = 'info') {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = `draftly-notification draftly-notification-${type}`;
-        notification.textContent = message;
-        
-        // Style the notification
-        Object.assign(notification.style, {
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            zIndex: '10001',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            fontSize: '14px',
-            fontWeight: '500',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-            opacity: '0',
-            transform: 'translateY(-10px)',
-            transition: 'all 0.3s ease'
-        });
+                // Create the button
+                const draftlyButton = document.createElement('button');
+                draftlyButton.innerText = '✉️ Draftly';
+                draftlyButton.className = 'draftly-button';
+                draftlyButton.title = 'Generate email reply with Draftly';
+                draftlyButton.style.margin = '0 8px';
+                draftlyButton.style.padding = '8px 12px';
+                draftlyButton.style.background = 'rgb(102, 126, 234)';
+                draftlyButton.style.color = 'white';
+                draftlyButton.style.border = 'none';
+                draftlyButton.style.borderRadius = '6px';
+                draftlyButton.style.fontSize = '12px';
+                draftlyButton.style.cursor = 'pointer';
+                draftlyButton.style.boxShadow = 'rgba(0, 0, 0, 0.2) 0px 2px 8px';
+                draftlyButton.style.position = 'absolute';
+                draftlyButton.style.right = '10px';
+                draftlyButton.style.top = '10px';
 
-        // Type-specific styling
-        const styles = {
-            success: { background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0' },
-            error: { background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' },
-            info: { background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' }
-        };
+                // Add click event listener
+                draftlyButton.addEventListener('click', () => {
+                    const userChoice = confirm('Choose an option:\nOK: Reply to mail thread\nCancel: Generate email response by prompting');
 
-        Object.assign(notification.style, styles[type] || styles.info);
+                    if (userChoice) {
+                        chrome.runtime.sendMessage({ action: 'replyToThread' }, (response) => {
+                            if (chrome.runtime.lastError) {
+                                console.error('Runtime error:', chrome.runtime.lastError);
+                                alert('An error occurred while communicating with the background script.');
+                                return;
+                            }
 
-        // Add to page
-        document.body.appendChild(notification);
+                            if (response && response.success) {
+                                alert(`AI Reply:\n${response.reply}`);
+                            } else {
+                                alert(`Error: ${response?.error || 'Unknown error occurred.'}`);
+                            }
+                        });
+                    } else {
+                        const prompt = prompt('Enter your prompt for the email reply:');
+                        if (prompt) {
+                            chrome.runtime.sendMessage({ action: 'generateReply', prompt }, (response) => {
+                                if (chrome.runtime.lastError) {
+                                    console.error('Runtime error:', chrome.runtime.lastError);
+                                    alert('An error occurred while communicating with the background script.');
+                                    return;
+                                }
 
-        // Animate in
-        setTimeout(() => {
-            notification.style.opacity = '1';
-            notification.style.transform = 'translateY(0)';
-        }, 100);
+                                if (response && response.success) {
+                                    alert(`Generated Reply:\n${response.reply}`);
+                                } else {
+                                    alert(`Error: ${response?.error || 'Unknown error occurred.'}`);
+                                }
+                            });
+                        }
+                    }
+                });
 
-        // Remove after delay
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            notification.style.transform = 'translateY(-10px)';
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 3000);
+                // Append the button to the email compose area
+                emailComposeArea.appendChild(draftlyButton);
+
+                console.log('✅ Draftly AI button injected into the right-hand side of the email compose area.');
+            }
+        }, 500); // Check every 500ms
     }
 
     /**

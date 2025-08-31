@@ -19,8 +19,19 @@ class DraftlyBackground {
 
         // Set up message handling for communication with content scripts and popup
         chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-            this.handleMessage(message, sender, sendResponse);
-            return true; // Keep message channel open for async responses
+            console.log('Received message:', message);
+
+            if (message.action === 'generateReply') {
+                this.handleGenerateReply(message, sendResponse);
+                return true; // Keep the message channel open for async response
+            } else if (message.action === 'replyToThread') {
+                this.handleReplyToThread(sendResponse);
+                return true; // Keep the message channel open for async response
+            } else {
+                console.error('Unknown message type:', message.action);
+                sendResponse({ success: false, error: 'Unknown message type' });
+                return true; // Ensure the message port stays open
+            }
         });
 
         // Set up context menu items (optional)
@@ -440,6 +451,98 @@ Talk soon`
         //     // Migrate old preference format to new format
         // }
     }
+}
+
+/**
+ * Handle AI reply generation
+ */
+async function handleGenerateReply(message, sendResponse) {
+    try {
+        console.log('Starting AI reply generation with message:', message);
+        const token = await getOAuthToken();
+        console.log('OAuth token obtained:', token);
+
+        const apiUrl = 'https://api.openai.com/v1/completions';
+        const headers = {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        };
+
+        const body = JSON.stringify({
+            prompt: message.prompt || 'Reply to this email thread.',
+            tone: message.tone,
+            model: 'text-davinci-003',
+            max_tokens: 150
+        });
+
+        console.log('Sending API request to OpenAI:', { apiUrl, headers, body });
+        const response = await fetch(apiUrl, { method: 'POST', headers, body });
+        const data = await response.json();
+
+        console.log('Received API response:', data);
+        if (response.ok) {
+            sendResponse({ success: true, reply: data.choices[0].text });
+        } else {
+            console.error('API error:', data.error);
+            sendResponse({ success: false, error: data.error.message });
+        }
+    } catch (error) {
+        console.error('Error generating reply:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+/**
+ * Handle reply to email thread
+ */
+async function handleReplyToThread(sendResponse) {
+    try {
+        const token = await getOAuthToken();
+        console.log('OAuth token obtained for replyToThread:', token);
+
+        const apiUrl = 'https://api.openai.com/v1/completions';
+        const headers = {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        };
+
+        const body = JSON.stringify({
+            prompt: 'Reply to this email thread.',
+            model: 'text-davinci-003',
+            max_tokens: 150
+        });
+
+        console.log('Sending API request for replyToThread:', { apiUrl, headers, body });
+        const response = await fetch(apiUrl, { method: 'POST', headers, body });
+        const data = await response.json();
+
+        console.log('Received API response for replyToThread:', data);
+        if (response.ok) {
+            sendResponse({ success: true, reply: data.choices[0].text });
+        } else {
+            console.error('API error for replyToThread:', data.error);
+            sendResponse({ success: false, error: data.error.message });
+        }
+    } catch (error) {
+        console.error('Error handling replyToThread:', error);
+        sendResponse({ success: false, error: error.message });
+    }
+}
+
+/**
+ * Get OAuth token using chrome.identity
+ */
+function getOAuthToken() {
+    return new Promise((resolve, reject) => {
+        chrome.identity.getAuthToken({ interactive: true }, (token) => {
+            if (chrome.runtime.lastError || !token) {
+                console.error('Failed to get OAuth token:', chrome.runtime.lastError);
+                reject(new Error(chrome.runtime.lastError?.message || 'Failed to get OAuth token'));
+            } else {
+                resolve(token);
+            }
+        });
+    });
 }
 
 // Initialize the background service

@@ -5,7 +5,7 @@
 
 class DraftlyAIService {
     constructor() {
-        this.apiKey = null;
+        this.apiKey = 'my api key'; 
         this.rateLimiter = new RateLimiter();
         this.consentManager = new ConsentManager();
         this.isInitialized = false;
@@ -18,9 +18,6 @@ class DraftlyAIService {
         if (this.isInitialized) return;
 
         try {
-            // Load API key from storage
-            await this.loadAPIKey();
-            
             // Check user consent
             await this.consentManager.initialize();
             
@@ -39,10 +36,14 @@ class DraftlyAIService {
      * @param {Object} options - Additional options
      * @returns {Promise<string>} - The generated reply
      */
-    async generateEmailReply(input, tone = 'professional', options = {}) {
+    async generateEmailReply(input, tone = 'formal', options = {}) {
         try {
             console.log('🤖 Starting AI email generation...', { tone, inputLength: input?.length });
-            
+
+            if (!['formal', 'casual'].includes(tone.toLowerCase())) {
+                throw new Error('Invalid tone. Only "Formal" and "Casual" are allowed.');
+            }
+
             // Check initialization
             if (!this.isInitialized) {
                 console.log('🔄 Initializing AI service...');
@@ -67,7 +68,7 @@ class DraftlyAIService {
             
             if (!this.rateLimiter.canMakeRequest()) {
                 const resetTime = this.rateLimiter.getResetTime();
-                throw new Error(`Draftly rate limit exceeded. You've made ${rateLimitStatus.recentRequests} requests in the last minute (max: ${this.rateLimiter.maxRequestsPerMinute}). Try again in ${Math.ceil(resetTime / 1000)} seconds.`);
+                throw new Error(`Draftly rate limit exceeded. Try again in ${Math.ceil(resetTime / 1000)} seconds.`);
             }
 
             // Validate input

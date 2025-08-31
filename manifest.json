@@ -7,7 +7,9 @@
   
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "identity",
+    "identity.email"
   ],
   
   "host_permissions": [
@@ -38,9 +40,9 @@
   
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["https://mail.google.com/*"],
       "js": ["content/content.js"],
-      "css": ["content/content.css"]
+      "run_at": "document_idle"
     }
   ],
   
